@@ -1,0 +1,72 @@
+﻿Descrição passo a passo do processo de desenvolvimento da API
+
+====== Criando Projeto ======
+Primeiramente criamos o projeto ApiFuncional, na primeira aula deste Módulo -> Manipulando operações no banco de dados.
+
+Em sequência apagamos a controller e classe que veio como base do projeto para ele ficar basicamente limpo, vazio,
+após isso criamos o diretório Models onde vamos criar nossas entidades. 
+
+====== Criando Entidade ======
+A primeira entidade criada foi a de Produtos com as propriedades (Id, Nome, Preco, QuantidaEstoque e Descricao) além
+das propriedades adicionamos algumas DataAnnotations, para ID, colocamos [Key], para as demais colocamos  a required
+[Required(ErrorMessage = "O campo {0} é obrigatório")], além dela colocamos no preço uma DataAnnotation de Range
+[Range(1, int.MaxValue, ErrorMessage = "O preço deve ser maior que zero")]
+
+====== Configurando EF ======
+Depois deste processo configuramos o EF Core, através da instalação de pacotes via Package Manager com os seguintes comandos
+Install-Package Microsoft.EntityFrameworkCore.SqlServer, Fornece o suporte ao SQLServer
+Install-Package Microsoft.EntityFrameworkCore.Design, serve para gerar os scripts
+Install-Package Microsoft.EntityFrameworkCore.Tools, para suporte as funcionalidades de geração do próprio EF Core
+
+Após instalar conferir as versões dos pacotes se batem com a versão do .Net Framework, se for o Net8.0 os pacotes devem ser
+na versão 8. alguma coisa para evitar problemas e para que tudo funcione corretamente
+
+Após isso adicionamos o diretório Data, para criarmos nosso DbContext, criamos então a ApiDbContext
+está classe herda de DbContext do EntityFrameworkCore, e depois criamos o construtor da classe com alguns parametros
+no caso passamos o parametro DbContextOptions que é o que nos permite definir a connection string e etc. Onde passamos para 
+a classe base DbContext as opções pra saber onde conectar qual o banco e etc, o construtor ficou assim.
+public ApiDbContext(DbContextOptions<ApiDbContext> options) : base(options){}
+
+Depois do DbContext criado, passamos para a configuração da nossa Program.cs para dar suporte ao DbContext/SQLServer, para
+isso adicionamos o seguinte código acima da var app = builder.Build(); Segue o código abaixo.
+builder.Services.AddDbContext<ApiDbContext>(options =>
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+});
+
+Este código acima adiciona o suporte ao DbContext, passamos a classe que ta implementando ele, definimos suas options
+passando para usar o SqlServer e  para que ele vá até o arquivo de configuração do projeto que é o appsettings.json e pegue
+a ConnectionString armazenada na chave DefaultConnection e vai usar ela como conexão do banco de dados.
+
+====== Implementando Connection String ======
+Após configurar todo o suporte ao EF, precisamos implementar a conexão do nosso banco de dados, para isso vamos ao arquivo de
+configuração do projeto appsettings.json e adicionamos as seguintes chaves logo após "AllowedHosts": "*" passamos uma virgula e 
+vamos para a próxima linha onde implementamos nossa connection string, ficou desta forma.
+
+"ConnectionStrings": {
+    "DefaultConnecion": "Server=(localdb)\\mssqllocaldb;Database=ApiFuncional;Trusted_Connection=True;MultipleActiveResultSets=true"
+ }
+
+ ====== Mapeando Uma Entidade ======
+ Para isso vamos a nossa classe ApiDbContext e abaixo do construtor vamos criar uma propriedade do tipo Dbset de Produto
+ ficando da seguinte forma public DbSet<Produto> Produtos{ get; set; }, isso indica ao DbContext que queremos criar uma tabela
+ com as propriedades dessa classe, que no caso é a classe Produto, e ele já aproveita e segue as recomendações dos DataAnotattions
+
+ Após isso precisamos adicionar uma migration, para isso vamos ao Console PM (Package Manager) e executamos o comando 
+ Add-Migration "NOME", utilizamos o nome Inicial neste primeiro caso, após execuat o comando podemos observar que um diretório
+ Migrations foi criado e nele consta 2 arquivos 1 com o mapeamento da entidade Produtos que é a configuração inicial e 1 outro
+ arquivo chamado de Snapshot que é basicamente uma foto de como estava antes e como ficou depois, e sempre que vamos mexendo criando
+ novas migrations ele vai gerando estas snapshots para saber como era o estado da aplicação antes e como ficou depois, permitindo 
+ assim desfazer uma migration e volta-la para o estado anterior.
+
+ Uma alternativa para o comando Add-Migration "NOME" é o comando dotnet ef migrations add "NOME" no Console e não no PM.
+
+ ====== Criando o Banco de dados ======
+ Após criar a migration podemos aplica-la no nosso banco de dados, desde que o endereço informado na connectionStrings esteja 
+ apontando para um banco que funcione, nessa hora pode acontecer um problema. O comando para fazer a aplicação é o seguinte
+ Update-Database este comando vai conectar ao banco para criar a tabela, e caso o banco não exista também vai cria-lo
+ conectar nele e criar a tabela, se ele não conseguir fazer isso, a ConnectionStrings está com problemas.
+
+ Comando alternativo para o Update-Database é o dotnet ef database update no console e não no PM, após executar o comando
+ podemos verificar no menu SQL Server Object Explorer, que pode ser acessado no visual studio através do menu View, que o banco
+ e a tabela da nossa entidade foram criados.
