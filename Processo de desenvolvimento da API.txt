@@ -67,6 +67,13 @@ vamos para a próxima linha onde implementamos nossa connection string, ficou de
  Update-Database este comando vai conectar ao banco para criar a tabela, e caso o banco não exista também vai cria-lo
  conectar nele e criar a tabela, se ele não conseguir fazer isso, a ConnectionStrings está com problemas.
 
- Comando alternativo para o Update-Database é o dotnet ef database update no console e não no PM, após executar o comando
+ Comando alternativo para o Update-Database é o => dotnet ef database update no console e não no PM, após executar o comando
  podemos verificar no menu SQL Server Object Explorer, que pode ser acessado no visual studio através do menu View, que o banco
  e a tabela da nossa entidade foram criados.
+
+ ====== Definindo os Action Results ======
+ Neste ponto ja estamos com a API criada, EF configurado, Entidade criada e mapeada e o Banco de Dados Mapeado e Criado
+ Agora partiremos para a manipulação dos registros através das operações via banco de dados. E isso será feito através das nossas
+ Action Results da nossa Controller Produto.
+
+ Criamos a controller com o nome ProdutosController.cs
