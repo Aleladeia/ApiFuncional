@@ -57,6 +57,18 @@ namespace ApiFuncional.Controllers
         [HttpPost]
         public async Task<ActionResult<Produto>> PostProduto(Produto produto) //Mantemos o produto pois no nosso post também
         {                                                                     //queremos que retorne o produto cadastrado
+            if(!ModelState.IsValid) //Algumas formas de fazer nossas próprias validações
+            {
+                //return BadRequest(ModelState); //funciona retorna os erros mas de forma simples
+
+                //return ValidationProblem(ModelState); //este é a boa pratica recomendada.
+
+                return ValidationProblem(new ValidationProblemDetails(ModelState) //outra versão da boa pratica, só que personalizada
+                {
+                    Title = "Um ou mais erros de validação ocorreram"
+                });
+            }
+
             _context.Produtos.Add(produto); //Adicionando o produto que recebemos via corpo no parametro do método
             await _context.SaveChangesAsync(); //Salvando o novo produto no banco de dados
 
@@ -66,6 +78,10 @@ namespace ApiFuncional.Controllers
         [HttpPut("{id:int}")]
         public async Task<IActionResult> PutProduto(int id, Produto produto)
         {
+            if(id != produto.Id) return BadRequest();
+
+            if (!ModelState.IsValid) return ValidationProblem(ModelState);
+
             _context.Produtos.Update(produto); //Atualizando 1 produto
             await _context.SaveChangesAsync(); //Salvando alterações no banco de dados
 
