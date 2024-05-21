@@ -77,3 +77,117 @@ vamos para a próxima linha onde implementamos nossa connection string, ficou de
  Action Results da nossa Controller Produto.
 
  Criamos a controller com o nome ProdutosController.cs
+
+ ====== Validando a entidade ======
+ Nesta Aula, foi apresentado algumas formas alternativas e consideradas como boas práticas para a validação de entidades, onde não
+ deixamos apenas como responsabilidade das data annotations, para isso fizemos um ajuste na nossa Program.cs onde no método/Service 
+ AddControllers chamamos outro método ficando da seguinte forma abaixo, onde ela ignora os filtros de validação que adicionamos a 
+ nossa model caso ela seja invalida.
+ 
+ AddControllers().ConfigureApiBehaviorOptions(options =>
+    {
+        options.SuppressModelStateInvalidFilter = true; 
+    });
+
+pode parecer contráditório mas com essa configuração podemos adicionar melhores validações a nossas ActionResults como por exemplo
+o que foi feito no método Post, onde validamos nossa ModelState caso seja invalidada, como está abaixo 3 exemplos, dessa forma
+conseguimos retornar mais detalhes sobre o erro, até de forma personalizada, e tiramos a responsabilidade de ser totalmente das data
+annotations.
+
+if(!ModelState.IsValid) //Algumas formas de fazer nossas próprias validações
+{
+   //return BadRequest(ModelState); //funciona retorna os erros mas de forma simples.
+
+   //return ValidationProblem(ModelState); //este é a boa pratica recomendada.
+
+   return ValidationProblem(new ValidationProblemDetails(ModelState) //outra versão da boa pratica, só que personalizada
+   {
+       Title = "Um ou mais erros de validação ocorreram"
+   });
+}
+
+ ====== Boas Praticas de Implementação ======
+ Nesta aula realizamos a adoção de algumas boas praticas para nossa ProdutosController.cs, onde passamos alguns verificações
+ para um retorno mais apropriado a cada situação, como por exemplo ao invés de retornar um null caso não exista a tabela Produtos
+ retornamos um notfound, evitando o erro de nullPointer Exception, utilizamos esta abordagem no nosso método Get
+if(_context.Produtos == null) //Evitando o erro de nullPointer exception
+{
+   return NotFound();
+}
+
+Já no nosso get por id, realizamos a abordagem acima e além dela, realizamos a abordagem abaixo, depois de realizar a consulta na tabela.
+if (produto == null) //Evitando o erro de nullPointer exception caso não exista o produto com o ID solicitado
+{
+   return NotFound(); // se não existe retorna 404 not found
+}
+
+Para nosso Post usamos uma abordagem parecida, pois não adianta dar um Add na tabela se o produto não existe, vai acabar retornando um erro
+500 retornando um null reference exception, e usando a forma abaixo isso é evitado e ainda da a oportunidade do cliente entrar em contato
+e informar que a aplicação não está se comportando como deveria.
+if(_context.Produtos == null)
+{
+   return Problem("Erro ao criar um produto, contate o suporte!");
+}
+
+Para o Put a abordagem mudou, primeiro substituimos o código de update na tabela deste abaixo
+_context.Produtos.Update(produto); para este _context.Entry(produto).State = EntityState.Modified;
+a diferença entre eles é que essa nova abordagem previne de um erro caracteristico do EF de entender que o objeto já foi manipulado em memória
+e dizer que ele não pode atachar um objeto que já está atachado em memória, então o nosso novo código informa que o estado do objeto que estamos
+enviando é modificado, então quando for feito o saveChanges ele já sabe que precisa realizar o update, então este caminho é o mais seguro.
+
+Além disso fizemos a substituição do código await _context.SaveChangesAsync(); que salva as alterações no banco, por um try catch. Porque?
+pois queremos evitar um problema de DbUpdateConcurrency, onde supondo que temos usuário A e B, o A está editando o produto Id 1 e manda salvar,
+nesse mesmo tempo o B também mandou salvar, então chegam 2 solicitações de update ao mesmo tempo, isso pode dar o problema de concorrência no
+banco de dados, para evitar este erro fazemos o tratamento do mesmo via o nosso Try Catch, por enquanto ficou desta forma
+try
+{
+   await _context.SaveChangesAsync();
+}
+catch (DbUpdateConcurrencyException) 
+{
+   throw;
+}
+
+Porém antes mesmo de dar só um throw, seria interessante verificar se o produto existe, para dar um erro mais especifico. Então para isso criamos
+após o nosso Delete, um método privado para fazer esta verificação. Segue abaixo.
+private bool ProdutoExists(int id)
+{
+   return (_context.Produtos?.Any(e => e.Id == id)).GetValueOrDefault(); //O Any retorna um boolean, true ou false
+}
+
+após isso vamos utilizar este método junto com nosso try catch que fica da seguinte forma.
+try
+{
+   await _context.SaveChangesAsync();
+}
+catch (DbUpdateConcurrencyException) 
+{
+   if (!ProdutoExists(id))
+   {
+      return NotFound();
+   }
+   else
+   {
+      throw;
+   }
+}
+
+Agora no nosso Delete usamos as mesmas abordagens do nosso get por Id
+Se a tabela não existir
+if(_context.Produtos == null) 
+{
+   return NotFound();
+}
+
+Se o produto não existir
+if (produto == null) 
+{
+   return NotFound();
+}
+
+E assim finalizamos a cobertura de boas práticas dos nossos requests, para melhorar ainda mais podemos ir ao nosso Projeto ApiFuncional e adicionar
+ao <PropertyGroup> a seguinte configuração <IncludeOpenAPIAnalyzers>true</IncludeOpenAPIAnalyzers> onde o código vai começar a reclamar, para adicionarmos
+as Produces que são algumas data annotations para os retornos de códigos Http, adiciona abaixo dos [HttpGet, Post, Put e etc] as seguintes linhas
+[ProducesResponseType(StatusCodes.Status204NoContent)]
+[ProducesResponseType(StatusCodes.Status404NotFound)]
+[ProducesDefaultResponseType].
