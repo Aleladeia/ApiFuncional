@@ -1,4 +1,5 @@
 using ApiFuncional.Data;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,7 +22,13 @@ builder.Services.AddDbContext<ApiDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
-var app = builder.Build();
+//Definindo o Identity
+builder.Services.AddIdentity<IdentityUser, IdentityRole>() 
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<ApiDbContext>();
+
+//Definindo o comportamento da nossa App daqui pra baixo
+var app = builder.Build(); 
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -31,6 +38,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+//este sempre vem antes do Authorization, se for invertido a API não funciona
+app.UseAuthentication(); 
 
 app.UseAuthorization();
 

@@ -191,3 +191,35 @@ as Produces que são algumas data annotations para os retornos de códigos Http,
 [ProducesResponseType(StatusCodes.Status204NoContent)]
 [ProducesResponseType(StatusCodes.Status404NotFound)]
 [ProducesDefaultResponseType].
+
+====== Segurança - Implementando o ASP.NET Identity ======
+
+ASP.NET Identity = componente que da suporte a API para controle de usuários tanto na autenticação quanto na autorização. Trabalha a identidade de usuário
+gera algumas tabelas no banco de dados.
+
+Primeiramente para realizarmos a implementação do Identity precisamos fazer a instalação do pacote que vai dar suporte ao Identity no nosso banco de dados
+e este conversa com o Identity através do Entity Framework Core, para instalar o componente, basta ir ao Package Manager e informar o comando
+Install-Package Microsoft.AspNetCore.Identity.EntityFrameworkCore, isso pode ser diferente para outros bancos de dados, mas no nosso caso que é o SQL com EF
+vai funcionar para este caso.
+
+após instalado precisamos configurar na Program.cs, logo abaixo do AddDbContext adicionamos então o código abaixo
+builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<ApiDbContext>();
+
+Próximo passo é inserir o código abaixo exatamente na ordem que está, pois se for inversso a API não vai funcionar
+app.UseAuthentication(); 
+app.UseAuthorization();
+este código é colocado logo após definirmos comportamento da nossa App, colocamos logo depois das configurações HTTP
+
+Depois disso vamos a nosso arquivo de configuração do EF onde definimos o DbContext e alteramos a sua herança para IdentityDbContext que no fim
+herda de DbContext.
+
+após este passo vamos adicionar a Migration, para criar as tabelas que dão suporte ao Identity, e depois fazemos a atualização do nosso DataBase
+para adicionar uma Migration usamos o comando Add-Migration Identity e depois para atualizar o banco Update-Database.
+
+====== Segurança - Apresentando o JWT (Json web Token) ======
+
+Gera um token que serve como credencial para nosso usuário validar se pode fazer algo ou não na nossa API
+
+====== Segurança - Implementando o JWT na API ======
