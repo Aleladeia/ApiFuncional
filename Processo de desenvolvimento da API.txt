@@ -223,3 +223,38 @@ para adicionar uma Migration usamos o comando Add-Migration Identity e depois pa
 Gera um token que serve como credencial para nosso usuário validar se pode fazer algo ou não na nossa API
 
 ====== Segurança - Implementando o JWT na API ======
+
+Primeiro passo é criar uma model JwtSettings.cs, nele adicionamos 4 propriedades, Segredo (string valor passado é um GUID), ExpiracaoHoras(int)
+Emissor(string aplicação que emite o token), Audiencia(string, endereço da aplicação)
+
+Segundo passo geramos as configurações no appsettings em uma nova chave com o mesmo nome da nossa classe "JwtSettings":{}
+
+Terceiro passo adicionar o pacote JwtBearer com o comando Install-Package Microsoft.AspNetCore.Authentication.JwtBearer (suporte a emissão do Json web Token)
+
+Quarto passo configurar na Program.cs com este código
+    var JwtSettingsSection = builder.Configuration.GetSection("JwtSettings");
+    builder.Services.Configure<JwtSettings>(JwtSettingsSection);
+
+    var jwtSettings = JwtSettingsSection.Get<JwtSettings>();
+    var key = Encoding.ASCII.GetBytes(jwtSettings.Segredo);
+
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    }).AddJwtBearer(options =>
+    {
+        options.RequireHttpsMetadata = true;
+        options.SaveToken = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidAudience = jwtSettings.Audiencia,
+            ValidIssuer = jwtSettings.Emissor
+        };
+    });
+
+====== Segurança - Controller de Autenticação ======
+Como gerar, validar o Token
