@@ -33,7 +33,7 @@ builder.Services.AddIdentity<IdentityUser, IdentityRole>()
 
 //Pegando o Token e gerando a chave encodada
 var JwtSettingsSection = builder.Configuration.GetSection("JwtSettings");
-builder.Services.Configure<JwtSettings>(JwtSettingsSection);
+builder.Services.Configure<JwtSettings>(JwtSettingsSection); //essa configuração permite injetar o JwtSettings como injeção de dependência
 
 var jwtSettings = JwtSettingsSection.Get<JwtSettings>();
 var key = Encoding.ASCII.GetBytes(jwtSettings.Segredo);

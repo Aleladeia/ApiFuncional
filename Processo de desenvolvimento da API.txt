@@ -231,7 +231,8 @@ Segundo passo geramos as configurações no appsettings em uma nova chave com o 
 
 Terceiro passo adicionar o pacote JwtBearer com o comando Install-Package Microsoft.AspNetCore.Authentication.JwtBearer (suporte a emissão do Json web Token)
 
-Quarto passo configurar na Program.cs com este código
+Quarto passo configurar na Program.cs com este código antes de definir o comportamento do nosso app. que é essa linha var app = builder.Build(); 
+E depois da definição/configuração do Identity
     var JwtSettingsSection = builder.Configuration.GetSection("JwtSettings");
     builder.Services.Configure<JwtSettings>(JwtSettingsSection);
 
@@ -257,4 +258,159 @@ Quarto passo configurar na Program.cs com este código
     });
 
 ====== Segurança - Controller de Autenticação ======
-Como gerar, validar o Token
+Como gerar, validar o Token, implementação da controller que vai fazer tanto o registro do usuário como também o seu login 
+
+Primeiro vamos criar uma nova Controller, que chamamos de AuthController, inicialmente ela ficou assim.
+
+using Microsoft.AspNetCore.Mvc;
+
+namespace ApiFuncional.Controllers
+{
+
+    [ApiController] //informa que é uma controller de API
+    [Route("api/conta")]
+    public class AuthController : ControllerBase
+    {
+
+        [HttpPost("registrar")]
+        public async Task<IActionResult> Registrar() //criar usuário
+        {
+            return Ok();
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login() //autenticar usuário
+        {
+            return Ok();
+        }
+    }
+}
+
+Depois disso precisamos criar 2 Models a RegisterUserViewModel e a LoginUserViewModel como segue abaixo
+
+//RegisterUserViewModel:
+using System.ComponentModel.DataAnnotations;
+
+namespace ApiFuncional.Models
+{
+    public class RegisterUserViewModel
+    {
+        [Required(ErrorMessage = "O campo {0} é obrigatório")]
+        [EmailAddress(ErrorMessage = "O campo {0} está em formato inválido")]
+        public string Email { get; set; }
+
+        [Required(ErrorMessage = "O campo {0} é obrigatório")]
+        [StringLength(100, ErrorMessage = "O campo {0} precisa ter entre {2} e {1} caracteres", MinimumLength = 6)]
+        public string Password { get; set; }
+
+        [Compare("Password", ErrorMessage = "As senhas não conferem")]
+        public string ConfirmPassword { get; set; }
+
+    }
+}
+
+//LoginUserViewModel:
+using System.ComponentModel.DataAnnotations;
+
+namespace ApiFuncional.Models
+{
+    public class LoginUserViewModel
+    {
+        [Required(ErrorMessage = "O campo {0} é obrigatório")]
+        [EmailAddress(ErrorMessage = "O campo {0} está em formato inválido")]
+        public string Email { get; set; }
+
+        [Required(ErrorMessage = "O campo {0} é obrigatório")]
+        [StringLength(100, ErrorMessage = "O campo {0} precisa ter entre {2} e {1} caracteres", MinimumLength = 6)]
+        public string Password { get; set; }
+    }
+}
+
+Após criarmos nossas models podemos voltar na nossa controller e passar nossas models como parametro para nossos métodos Registrar e Login
+como está abaixo.
+
+public async Task<IActionResult> Registrar(RegisterUserViewModel registerUser)
+
+public async Task<IActionResult> Login(LoginUserViewModel loginUser)
+
+E assim ja poemos fazer o uso do identity, mas pra isso precisamos injetar 3 dependências na nossa controller, acima dos Métodos Login e registrar
+
+        private readonly SignInManager<IdentityUser> _signInManager; //gerenciador de signin
+        private readonly UserManager<IdentityUser> _userManager; // trabalha o uso de metodos dos usuários
+        private readonly JwtSettings _jwtSettings; // detalhes do Json web token pois vamos usala para emitir o token
+
+        public AuthController(SignInManager<IdentityUser> signInManager, //Aqui é nosso construtor
+                              UserManager<IdentityUser> userManager,
+                              IOptions<JwtSettings> jwtSettings) //preciso passar esse IOptions porque ele é configurado como Options
+        {
+            _signInManager = signInManager;
+            _userManager = userManager;
+            _jwtSettings = jwtSettings.Value;
+        } // fim do construtor
+
+isso vai ficar acima da data annotation [HttpPost("registrar")].
+
+com essas depêndencias usadas podemos fazer o uso delas, e nossos Métodos ficam dessa forma a sua implementação.
+//Registrar:
+
+            if(!ModelState.IsValid) return ValidationProblem(ModelState); //validando estado da Model
+
+            var user = new IdentityUser //criando um novo IdentityUser
+            {
+                UserName = registerUser.Email,
+                Email = registerUser.Email,
+                EmailConfirmed = true
+            };
+
+            var result = await _userManager.CreateAsync(user, registerUser.Password); // Aqui retorna um objeto do Indentity
+
+            if(result.Succeeded) //se obter sucesso,  vai gerar o nosso Token
+            {
+                await _signInManager.SignInAsync(user, false);
+                return Ok(GerarJwt());
+            }
+
+            return Problem("Falha ao registrar o usuário"); // caso der algum problema retorna esta mensagem de erro
+
+//Login:
+            if (!ModelState.IsValid) return ValidationProblem(ModelState); // igual ao  de Registrar
+
+            //se tudo certo retorna o objeto com os dados necessários para gerar o token, os 2 ultimos parametros são para
+            //não persistir o usuário logado(false), e para caso falhe no login 5 vezes o usuário fica travado por 15 minutos(true)
+            var result = await _signInManager.PasswordSignInAsync(loginUser.Email, loginUser.Password, false, true); 
+
+            if(result.Succeeded)
+            {
+                return Ok(GerarJwt()); //  Gera o token se tudo certo
+            }
+
+            return Problem("Usuário ou senha incorretos");
+
+após isso precisamos criar o o método que vai gerar o token, que não foi implementado ainda, nosso método é o GerarJwt, segue abaixo 
+sua implementação.
+
+        private string GerarJwt()
+        {
+            var tokenHandler = new JwtSecurityTokenHandler(); //manipulador de token
+            var key = Encoding.ASCII.GetBytes(_jwtSettings.Segredo); //com base no segredo que foi feito encode de uma sequencia de bytes da nossa chave
+
+            var token = tokenHandler.CreateToken(new SecurityTokenDescriptor // vamos criar o token com este método
+            {
+                Issuer = _jwtSettings.Emissor, //definindo emissor
+                Audience = _jwtSettings.Audiencia, // audiencia
+                Expires = DateTime.UtcNow.AddHours(_jwtSettings.ExpiracaoHoras), //tempo de expiração
+                //utilizando a chave encodade e um algoritmo usado para assinar o token e assim ja temos nosso token gerado 
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            });
+
+            var encodedToken = tokenHandler.WriteToken(token); //como retorna em um formato de securityToken precisamos converter para string
+
+            return encodedToken; //e retorna nosso token
+        }
+
+E pronto está configurado o nosso JWT, para validar podemos acessar o site https://jwt.io/ colar o token no campo encoded, e informar a assinatura que definimos
+no appsettings no campo verify signature, mas este é um dado sensivel apenas para validar o token, nunca deve sair de lá do appsettings e essa chave nunca
+estara disponivel para um usuário que quer burlar o sistema.
+
+
+====== Segurança - Suporte a JWT no Swagger ======
