@@ -414,3 +414,52 @@ estara disponivel para um usuário que quer burlar o sistema.
 
 
 ====== Segurança - Suporte a JWT no Swagger ======
+Vamos ter que fazer uma alteração na nossa Program.cs onde adicionamos o Swagger
+vai sair disso.
+
+builder.Services.AddSwaggerGen();
+
+Para isso abaixo:
+Antes apenas adicionamos o gerador do Swagger builder.Services.AddSwaggerGen(), agora estamos adicionando mais algumas configurações
+
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "Insira o token JWT desta maneira: Bearer {seu token}",
+        Name = "Authorization",
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[]{}
+        }
+    });
+});
+
+Após inserir este código e rodarmos a aplicação, podemos ver ao lado direito do swagger um botão de Authorize com um cadeado, e também em todos os outros endpoints.
+
+====== Segurança - Autenticação via JWT ======
+
+Para utilizar nossa autenticação, vamos a nossa controller ProdutosController e colocar o atributo/dataAnnotation [Authorize] bem acima da declaração da classe
+acima do atributo [ApiController]
+
+depois se quisermos abrir algumas excessões em endpoints especificos que podemos deixar ser usado sem necessidade de autorização podemos passar
+o atributo [AllowAnonymous] que vai permitir usuários não autorizados a usar o endpoint, ele desfaz o que o Authorize faz.
+
+A boa pratica é essa, negar o acesso a todo usuário anonimo ou sem autorização e ir abrindo excessões. 
+
+====== Segurança - Autorização via JWT ======

@@ -3,9 +3,11 @@ using ApiFuncional.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore; //muitas coisas da parte de WebAPI ainda tem um conexão de dependencia do MVC pois tudo
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 // praticamente é filho de uma controller
 namespace ApiFuncional.Controllers
 {
+    /*[Authorize]*/
     [ApiController] //Data Anotattion para dizer que se trata de uma controller de API
     [Route("api/produtos")]
     public class ProdutosController : ControllerBase
@@ -55,6 +57,7 @@ namespace ApiFuncional.Controllers
             //eles são mais usados quando queremos retornar algo mais diferenciado
         }
 
+        /*[AllowAnonymous]*/
         [HttpGet("{id:int}")] //recebendo o id pela rota
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
