@@ -463,3 +463,59 @@ o atributo [AllowAnonymous] que vai permitir usuários não autorizados a usar o
 A boa pratica é essa, negar o acesso a todo usuário anonimo ou sem autorização e ir abrindo excessões. 
 
 ====== Segurança - Autorização via JWT ======
+
+Nesta aula vimos como implementar a autorização através do uso de roles para os usuários, para isso primeiro definimos no nosso endpoint de Delete 
+a data annotation [Authorize(Roles = "Admin")], após definirmos isso os usuários que não possuem este role, não conseguem fazer o uso do endpoint
+
+para dar permissão configuramos uma role em nosso usuário diretamente no banco de dados, primeiro fomos até a tabela AspNetUsers e pegamos o Id de um
+usuário que queremos dar está role/permissão, segue o Id => 921e8a9a-1bf2-419c-8e52-49c4016a1378, após isso fomos para a tabela AspNetRoles e adicionamos
+um novo registro, Id = 1, Name = Admin, NormalizedName = ADMIN, ConcurrencyStamp = b1a791a1-6f47-4a57-ad8e-b5c82c6aa761 <= isso é um GUID. O Proximo passo
+foi ir a tabela AspNetUserRoles e também adicionar um novo registro, nesta tabela é feita a amarração entre usuário e role no campo UserId passamos o id 
+do usuário que copiamos anteriormente e no campo RoleId, passamos o Id da role que criamos, ficou desta forma UserId = 921e8a9a-1bf2-419c-8e52-49c4016a1378, RoleId = 1
+
+Próximo passo após vincular nosso usuário a uma role é adaptar nosso método GerarJwt(), que ficou assim agora.
+
+private async Task<string> GerarJwt(string email) // mudamos a assinatura, anteriormente era  private string GerarJwt()
+        {
+            var user = await _userManager.FindByEmailAsync(email); // linhas novas
+            var roles = await _userManager.GetRolesAsync(user);    
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, user.UserName),
+            };
+
+            // Adicionar roles como claims
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }                                                      // Fim linhas novas
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(_jwtSettings.Segredo);
+
+            var token = tokenHandler.CreateToken(new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),             // Linha nova
+                Issuer = _jwtSettings.Emissor,
+                Audience = _jwtSettings.Audiencia,
+                Expires = DateTime.UtcNow.AddHours(_jwtSettings.ExpiracaoHoras),
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            });
+
+            var encodedToken = tokenHandler.WriteToken(token);
+
+            return encodedToken;
+        }
+
+Por fim precisamos alterar também nossos endpoint de regisro e de login que fazem o uso desta função
+
+Em registrar sai de return Ok(GerarJwt()); para return Ok(await GerarJwt(user.Email));  
+Em login sai de return Ok(GerarJwt()); para return Ok(await GerarJwt(loginUser.Email));
+
+E pronto finalizamos a implementação das roles para os usuários e as mesmas são passadas ao nosso token com os ajustes feitos na função GerarJwt()
+
+====== Segurança - HTTPS ======
+
+entendendo a importância do uso do HTTPS, dentro da nossa api vamos obrigar o uso deste protocolo.
+O mesmo já vem por padrão configurado na nossa Program.cs onde utilizamos o middleware app.UseHttpsRedirection();
