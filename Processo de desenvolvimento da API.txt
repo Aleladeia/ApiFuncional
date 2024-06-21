@@ -519,3 +519,261 @@ E pronto finalizamos a implementação das roles para os usuários e as mesmas s
 
 entendendo a importância do uso do HTTPS, dentro da nossa api vamos obrigar o uso deste protocolo.
 O mesmo já vem por padrão configurado na nossa Program.cs onde utilizamos o middleware app.UseHttpsRedirection();
+
+====== Segurança - CORS ======
+
+Primeiro Passo - Configurando CORS na classe Program.cs de acordo com o que a microsoft recomenda, adicionamos 2 politicas sendo elas Developmente
+e Production. este códico abaixo pode ser inserido logo após a configuração do builder.Services.AddControllers()
+
+builder.Services.AddCors(options =>
+{
+    //Abaixo fizemos a adição de 2 politicas, uma para o ambiente de dev que é mais aberta, aceita requisições de qualquer origem
+    //que podem consumir a API, utilizar qualquer método(GET,POST,PUT...)
+    options.AddPolicy("Development", builder =>
+                builder
+                    .AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader());
+
+    //Já a politica de Production, é mais restrita, só aceita requisições de localhost:9000 e o uso do método phost
+    options.AddPolicy("Production", builder =>
+                builder
+                    .WithOrigins("https://localhost:9000")
+                    .WithMethods("POST")
+                    .AllowAnyHeader());
+});
+
+Depois de configurarmos a parte de builder vamos alterar a configuração da app no código abaixo, onde estava dessa forma antes.
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+Passa a ser assim 
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    app.UseCors("Development");
+}
+else
+{
+    app.UseCors("Production");
+}
+
+Como testamos isso? Para testar o cors, que funciona baseado no browser, utilizamos o Código HTML TesteCors.html, nele informamos um ID de um produto existente
+na linha com o seguinte código -> url: 'https://localhost:7271/api/produtos/3',salvamos o arquivo podemos abrir este arquivo html no navegador para testar junto
+com nossa API já rodando. Se o ambiente for Development vai funcionar normalmente, pois não temos restrições de Origin e Method, como definido nas politica,
+e ele vai retornar as informações do nosso produto, agora se for em ambiente de production, ao clicarmos no botão Buscar Produto do TesteCors.html recebemos
+um erro que pode ser visto ao apertarmos F12 para abrir nosso inspecionador do browser também conhecido como DevTools, no console temos o erro abaixo.
+
+"Access to XMLHttpRequest at 'https://localhost:7271/api/produtos/3' from origin 'null' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' 
+header is present on the requested resource."
+
+O erro ocorre justamente por conta da nossa configuração de politica do CORS, essa é nossa unica forma de testar, pois se chamarmos no swagger o endpoint vai
+funcionar de qualquer forma.
+
+====== Segurança - Bônus - Otimizando a organização ======
+
+Nesta aula fizemos toda a externalização das configurações definidas na nossa Program.cs, então todos aqueles códigos de adição de serviços ao builder, foram 
+enviados para um novo diretório que criamos, o diretório configuration, nele criamos uma classe para cada configuração, começamos com o ApiConfig.cs como está 
+no código abaixo.
+
+public static class ApiConfig //É uma classe Estatica pois vamos criar um método de extensão que vai extender o próprio builder da nossa Program.cs
+{
+    //a palavra reservada this, quer dizer que estamos criando o método AddApiConfig dentro da classe WebApplicationBuilder, mesmo que nós não
+    //tenhamos o código fonte. Ele trata de um método de extensão.
+    public static WebApplicationBuilder AddApiConfig(this WebApplicationBuilder builder)
+    {
+        //Aqui dentro vamos trazer o código da nossa Program.cs
+        builder.Services.AddControllers()
+                        .ConfigureApiBehaviorOptions(options =>
+                        {
+                            // Ignora os filtros de validação que adicionamos a nossa model caso ela seja invalida
+                            options.SuppressModelStateInvalidFilter = true;
+                        });
+
+        return builder;
+    }
+
+}
+
+para crialo apenas criamos o novo método -> public static WebApplicationBuilder AddApiConfig(this WebApplicationBuilder builder) e dentro do nosso método
+adicionamos o código que estava na Program.cs, o que está logo abaixo.
+
+//Aqui dentro vamos trazer o código da nossa Program.cs
+            builder.Services.AddControllers()
+                            .ConfigureApiBehaviorOptions(options =>
+                            {
+                                // Ignora os filtros de validação que adicionamos a nossa model caso ela seja invalida
+                                options.SuppressModelStateInvalidFilter = true;
+                            });
+
+O mesmo processo aconteceu para as configurações do Cors, Swagger, DbContext (ef Core) e Identity, segue os códigos logo abaixo de como ficaram.
+
+//CORS    
+public static class CorsConfig
+{
+    public static WebApplicationBuilder AddCorsConfig(this WebApplicationBuilder builder)
+    {
+        //Configurando CORS
+        builder.Services.AddCors(options =>
+        {
+            //Abaixo fizemos a adição de 2 politicas, uma para o ambiente de dev que é mais aberta, aceita requisições de qualquer origem
+            //que podem consumir a API, utilizar qualquer método(GET,POST,PUT...)
+            options.AddPolicy("Development", builder =>
+                        builder
+                            .AllowAnyOrigin()
+                            .AllowAnyMethod()
+                            .AllowAnyHeader());
+
+            //Já a politica de Production, é mais restrita, só aceita requisições de localhost:9000 e o uso do método phost
+            options.AddPolicy("Production", builder =>
+                        builder
+                            .WithOrigins("https://localhost:9000")
+                            .WithMethods("POST")
+                            .AllowAnyHeader());
+        });
+        return builder;
+    }
+}
+
+//SWAGGER
+public static class SwaggerConfig
+{
+    public static WebApplicationBuilder AddSwaggerConfig(this WebApplicationBuilder builder)
+    {
+        // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+        builder.Services.AddEndpointsApiExplorer();
+        //Antes apenas adicionamos o gerador do Swagger, agora estamos adicionando mais algumas configurações
+        //código muito usado e geralmente é sempre a mesma coisa, faz alguns anos que não muda - adiciona o Suporte a JWT no swagger
+        builder.Services.AddSwaggerGen(c =>
+        {
+            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme //tipo de definição do esquema de segurança
+            {
+                Description = "Insira o token JWT desta maneira: Bearer {seu token}", // ensinando como utilizar o token
+                Name = "Authorization",
+                Scheme = "Bearer",
+                BearerFormat = "JWT", //formato do token é JWT
+                In = ParameterLocation.Header,
+                Type = SecuritySchemeType.ApiKey
+                //essa configuração é pra quando a OpenApi receber isso ela já sabe como repassar os dados
+            });
+
+            c.AddSecurityRequirement(new OpenApiSecurityRequirement //esse requiremente é para dizer o tipo de schema que estamos usando
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    new string[]{}
+                }
+            });
+        });
+        return builder;
+    }
+}
+
+//DBCONTEXT
+public static class DbContextConfig
+{
+    public static WebApplicationBuilder AddDbContextConfig(this WebApplicationBuilder builder)
+    {
+        //Definindo o EF Core
+        builder.Services.AddDbContext<ApiDbContext>(options =>
+        {
+            options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+        });
+        return builder;
+    }
+}
+
+//IDENTITY
+public static class IdentityConfig
+{
+    public static WebApplicationBuilder AddIdentityConfig(this WebApplicationBuilder builder)
+    {
+        //Definindo o Identity
+        builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+            .AddRoles<IdentityRole>()
+            .AddEntityFrameworkStores<ApiDbContext>();
+
+        //Pegando o Token e gerando a chave encodada
+        var JwtSettingsSection = builder.Configuration.GetSection("JwtSettings");
+        builder.Services.Configure<JwtSettings>(JwtSettingsSection); //essa configuração permite injetar o JwtSettings como injeção de dependência
+
+        var jwtSettings = JwtSettingsSection.Get<JwtSettings>();
+        var key = Encoding.ASCII.GetBytes(jwtSettings.Segredo);
+
+        builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        }).AddJwtBearer(options =>
+        {
+            options.RequireHttpsMetadata = true;
+            options.SaveToken = true;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                IssuerSigningKey = new SymmetricSecurityKey(key),
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidAudience = jwtSettings.Audiencia,
+                ValidIssuer = jwtSettings.Emissor
+            };
+        });
+        return builder;
+    }
+}
+
+Por fim nossa program.cs ficou assim como está logo abaixo.
+
+using ApiFuncional.Configuration;
+
+var builder = WebApplication.CreateBuilder(args);
+
+//Os códgigos existentes aqui para configuração do builder foi externalizado para o diretório Configuration em classes separadas para cada configuração.
+
+// Add services to the container.
+builder
+    .AddApiConfig()
+    .AddCorsConfig()
+    .AddSwaggerConfig()
+    .AddDbContextConfig()
+    .AddIdentityConfig();
+//Aqui é possivel chamar todos estes metódos de extensão em sequência pois eles retornam um WebApplicationBuilder e extende ele ao mesmo tempo
+//então sempre que retornamos ele podemos chama o próximo método dele mesmo. Construimos um builder, isso deixou nosso código mais facil de entender
+//e bonito.
+
+//Definindo o comportamento da nossa App daqui pra baixo
+var app = builder.Build();
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    app.UseCors("Development");
+}
+else
+{
+    app.UseCors("Production");
+}
+app.UseHttpsRedirection();
+//este sempre vem antes do Authorization, se for invertido a API não funciona
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
+app.Run();
+
+
+E esta pronta nossa API Funcional, Segundo o professor não precisamos saber muito além disso para começarmos a trabalhar com as APIS
+Obviamente temos conteúdos mais avançados para aprender no próximo curso.

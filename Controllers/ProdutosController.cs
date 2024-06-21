@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore; //muitas coisas da parte de WebAPI ainda tem um conexão de dependencia do MVC pois tudo
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 // praticamente é filho de uma controller
 namespace ApiFuncional.Controllers
 {
@@ -59,6 +60,7 @@ namespace ApiFuncional.Controllers
 
         /*[AllowAnonymous]*/
         [HttpGet("{id:int}")] //recebendo o id pela rota
+        //[EnableCors("Production")] habilitado cors de forma Granular, não é a melhor forma de usar pois espalha muito código, mas não é proibido.
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesDefaultResponseType]
